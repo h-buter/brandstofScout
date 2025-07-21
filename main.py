@@ -6,30 +6,36 @@ import influxdb_client, os, time
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 
-from projectSecrets import*
-from env import*
+import os
+from envLogos import* #import logo info
 
 #InfluxDB
-INFLUXDB_TOKEN = secretInfluxToken
-org = secretInfluxOrg
-url = secretInfluxUrl
-bucket= secretInfluxBucket
+INFLUXDB_TOKEN = os.environ['SECRET_INFLUX_TOKEN']
+org = os.environ['SECRET_INFLUX_ORG']
+url = os.environ['SECRET_INFLUX_URL']
+bucket= os.environ['SECRET_INFLUX_BUCKET']
 
 influxClient = influxdb_client.InfluxDBClient(url=url, token=INFLUXDB_TOKEN, org=org)
 
 #Home Assistant
-HA_URL = secretHomeassistantUrl
-HA_TOKEN = secretHomeAssistentToken
+HA_URL = os.environ['SECRET_HOMEASSISTANT_URL']
+HA_TOKEN = os.environ['SECRET_HOMEASSISTANT_TOKEN']
 
 
 STATION_LOGOS = envLogos
 
 apiKeyAnwb = 'NOT-NEEDED'
 
-bounding_box = secretBoundingBox
+lat_min = os.environ['SECRET_LAT_MIN']
+lon_min = os.environ['SECRET_LON_MIN']
+lat_max = os.environ['SECRET_LAT_MAX']
+lon_max = os.environ['SECRET_LON_MAX']
+bounding_box = [lat_min, lon_min, lat_max, lon_max]
 
 # Encode bounding box for the API query
 bbox_param = '%2C'.join(map(str, bounding_box))
+
+topCheapestStations = os.environ['TOP_CHEAPEST_STATIONS']
 
 stations = []
 
@@ -43,13 +49,16 @@ urlANWB = (
 )
 
 def main():
-
+    print(f"Script executed at {datetime.datetime.now()}")
     # delete_all_data_from_bucket()
     reqAnwbData()
     # createTestStation()
     push2Influx()
     
-    selectedFuelTypes = fuelTypesOfInterestHomeAssistant
+    fuel_types_raw = os.getenv("FUELTYPE_OF_INTEREST_HA", "")
+    selectedFuelTypes = set(fuel_types_raw.split(",")) if fuel_types_raw else set()
+
+    print("Fuel types of interest:", selectedFuelTypes)
     for fuelTypes in selectedFuelTypes:
         print(f"Fueltype: ", fuelTypes)
         push2HomeAssistant(topCheapestStations, fuelTypes)

@@ -1,0 +1,11 @@
+services:
+  brandstof-scout:
+    container_name: fuel-scout
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    build:
+      context: .
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+
