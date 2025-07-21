@@ -6,8 +6,7 @@ WORKDIR /app
 # Copy files
 COPY main.py /app/main.py
 #For logo info
-COPY env.py /app/env.py 
-# COPY projectSecrets.py /app/projectSecrets.py
+COPY envLogos.py /app/envLogos.py 
 COPY crontab.txt /app/crontab.txt
 COPY requirements.txt /app/requirements.txt
 
