@@ -7,13 +7,12 @@ brandstofScout is a python script that scout the cheapest fuel in the Netherland
 - Clone the repo
 - Create virtual env
 - Install the required packages in requirements.txt
-- Rename the projectSecrets.py.example to projectSecrets.py
-- Populate the projectSecrets.py with your own secrets
-- Take a look in env.py and change if you want
-- Run the main.py
+- Rename the .env.example to .env
+- Populate the .env with your own secrets
+- Run the Docker Compose file: ```sudo docker compose down && sudo docker compose build && sudo docker compose up -d```
+- Run ```sudo docker compose logs -f brandstof-scout``` to view its logs
 - Check in InfluxDB and Home assistant if the new values are being added
-- Download the logos of the fuel companies your area and place the in the following homeassistant directory:
-```home_assistant/www/fuelstations/logos```
+- Download the logos of the fuel companies in your area and place the in the following homeassistant directory: ```home_assistant/www/fuelstations/logos```
 - The logos should be named for example: esso.png, for the all fuel stations with the Esso brand.
 
 

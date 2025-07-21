@@ -1,6 +1,3 @@
-topCheapestStations = 3
-fuelTypesOfInterestHomeAssistant = {"EURO98", "EURO95", "AUTOGAS"} #Allowed values: EURO98, EURO95, AUTOGAS, CNG, DIESEL, DIESEL_SPECIAL, and maybe others but these are the ones I have found in my area
-
 #Map of known station names to logo URLs
 envLogos = {
     "Shell": "/local/fuelstations/logos/shell.png",
