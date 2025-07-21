@@ -4,3 +4,4 @@ __pycache__
 logo/
 logo.zip
 .env
+/testingScripts

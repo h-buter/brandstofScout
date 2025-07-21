@@ -207,21 +207,5 @@ def createTestStation():
     }
     stations.append(station)
 
-
-
-def delete_all_data_from_bucket():
-        delete_api = influxClient.delete_api()
-        
-        # Delete everything from the beginning of time until now
-        start = "1970-01-01T00:00:00Z"
-        stop = datetime.datetime.utcnow().isoformat("T") + "Z"
-
-        try:
-            delete_api.delete(start=start, stop=stop, predicate="", bucket=bucket, org=org)
-            print(f"All data deleted from bucket '{bucket}'.")
-        except Exception as e:
-            print(f"Failed to delete data: {e}")
-
-
 if __name__=="__main__":
     main()
