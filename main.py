@@ -157,7 +157,7 @@ def reqAnwbData():
         for item in response_json["value"]:
             station = {
                 "id": item["id"],
-                "name": item["title"],
+                "name": f"{item['title']}, {item['address']['streetAddress']}",
                 "latitude": item["coordinates"]["latitude"],
                 "longitude": item["coordinates"]["longitude"],
                 "address": f"{item['address']['streetAddress']}, {item['address']['postalCode']} {item['address']['city']}",
