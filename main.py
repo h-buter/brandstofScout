@@ -9,33 +9,38 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 import os
 from envLogos import* #import logo info
 
-#InfluxDB
-INFLUXDB_TOKEN = os.environ['SECRET_INFLUX_TOKEN']
-org = os.environ['SECRET_INFLUX_ORG']
-url = os.environ['SECRET_INFLUX_URL']
-bucket= os.environ['SECRET_INFLUX_BUCKET']
+devState = False
 
-influxClient = influxdb_client.InfluxDBClient(url=url, token=INFLUXDB_TOKEN, org=org)
+if (devState == False):
+    #InfluxDB
+    INFLUXDB_TOKEN = os.environ['SECRET_INFLUX_TOKEN']
+    org = os.environ['SECRET_INFLUX_ORG']
+    url = os.environ['SECRET_INFLUX_URL']
+    bucket= os.environ['SECRET_INFLUX_BUCKET']
 
-#Home Assistant
-HA_URL = os.environ['SECRET_HOMEASSISTANT_URL']
-HA_TOKEN = os.environ['SECRET_HOMEASSISTANT_TOKEN']
+    influxClient = influxdb_client.InfluxDBClient(url=url, token=INFLUXDB_TOKEN, org=org)
+
+    #Home Assistant
+    HA_URL = os.environ['SECRET_HOMEASSISTANT_URL']
+    HA_TOKEN = os.environ['SECRET_HOMEASSISTANT_TOKEN']
 
 
-STATION_LOGOS = envLogos
+    STATION_LOGOS = envLogos
 
-apiKeyAnwb = 'NOT-NEEDED'
+    apiKeyAnwb = 'NOT-NEEDED'
 
-lat_min = os.environ['SECRET_LAT_MIN']
-lon_min = os.environ['SECRET_LON_MIN']
-lat_max = os.environ['SECRET_LAT_MAX']
-lon_max = os.environ['SECRET_LON_MAX']
-bounding_box = [lat_min, lon_min, lat_max, lon_max]
+    lat_min = os.environ['SECRET_LAT_MIN']
+    lon_min = os.environ['SECRET_LON_MIN']
+    lat_max = os.environ['SECRET_LAT_MAX']
+    lon_max = os.environ['SECRET_LON_MAX']
+    bounding_box = [lat_min, lon_min, lat_max, lon_max]
 
-# Encode bounding box for the API query
-bbox_param = '%2C'.join(map(str, bounding_box))
+    # Encode bounding box for the API query
+    bbox_param = '%2C'.join(map(str, bounding_box))
 
-topCheapestStations = os.environ['TOP_CHEAPEST_STATIONS']
+    topCheapestStations = os.environ['TOP_CHEAPEST_STATIONS']
+else:
+    from projectSecrets import*
 
 stations = []
 
@@ -53,6 +58,8 @@ def main():
     # delete_all_data_from_bucket()
     reqAnwbData()
     # createTestStation()
+
+
     push2Influx()
     
     fuel_types_raw = os.getenv("FUELTYPE_OF_INTEREST_HA", "")
@@ -147,17 +154,17 @@ def getStationLogo(station_name):
 def reqAnwbData():
 
     response = requests.get(urlANWB)
-
-    # Check for a successful response
+    # Check for a successful responsB
     if response.status_code == 200:
         response_json = response.json()
-        # print(response_json)
+        if(devState == True):
+            print(response_json)
 
         # Transform into a clean list of dictionaries
         for item in response_json["value"]:
             station = {
                 "id": item["id"],
-                "name": item["title"],
+                "name": f"{item['title']}, {item['address']['streetAddress']}",
                 "latitude": item["coordinates"]["latitude"],
                 "longitude": item["coordinates"]["longitude"],
                 "address": f"{item['address']['streetAddress']}, {item['address']['postalCode']} {item['address']['city']}",
