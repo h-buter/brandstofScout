@@ -72,32 +72,31 @@ def push2HomeAssistant(topX, fuelType):
     #Query the top topX cheapest stations
     flux_query =("""
     from(bucket: "fuel_prices")
-      |> range(start: today())
-      |> filter(fn: (r) => r._measurement == "fuel_station_price")
-      |> filter(fn: (r) => r._field == "price")
-      |> filter(fn: (r) => r.fuel_type == "{0}")
-      |> aggregateWindow(every: 1d, fn: min, createEmpty: false)
-      |> group(columns: ["station_name", "city", "fuel_type"])
-      |> distinct(column: "_value")
-      |> group(columns: [])
-      |> sort(columns: ["_value"])
-      |> limit(n: {1})
-      |> keep(columns: ["_value", "station_name", "city", "fuel_type"])
+        |> range(start: today())
+        |> filter(fn: (r) => r._field == "price" or r._field == "latitude" or r._field == "longitude")
+        |> filter(fn: (r) => r.fuel_type == "{0}")
+        |> aggregateWindow(every: 1d, fn: min, createEmpty: false)
+        |> group(columns: ["station_name", "city", "fuel_type"])
+        |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+        |> group(columns: [])
+        |> sort(columns: ["price"])
+        |> limit(n: 2)
+        |> keep(columns: ["price", "station_name", "city", "fuel_type", "latitude", "longitude"])
     """.format(str(fuelType), topX))
+
 
     result = query_api.query(flux_query)
     records = result[0].records if result else []
-
-    # print("Influx query results")
-    # print(records)
 
     #Format data and push the individual stations
     for i, record in enumerate(records, start=1):
         station = {
             "station_name": record["station_name"],
             "city": record["city"],
+            "lat": record["latitude"],
+            "lon": record["longitude"],
             "fuel_type": record["fuel_type"],
-            "price": record.get_value(),
+            "price": record["price"],
             "logo": getStationLogo(record["station_name"])
         }
         pushStationHomeAssistant(i, station, fuelType)
@@ -118,6 +117,8 @@ def pushStationHomeAssistant(index, station, fuelType):
         "attributes": {
             "station_name": station["station_name"],
             "city": station["city"],
+            "lat": station["lat"],
+            "lon": station["lon"],
             "fuel_type": station["fuel_type"],
             "logo": station["logo"],
             "unit_of_measurement": "€",
@@ -157,7 +158,7 @@ def reqAnwbData():
         for item in response_json["value"]:
             station = {
                 "id": item["id"],
-                "name": item["title"],
+                "name": f"{item['title']}, {item['address']['streetAddress']}",
                 "latitude": item["coordinates"]["latitude"],
                 "longitude": item["coordinates"]["longitude"],
                 "address": f"{item['address']['streetAddress']}, {item['address']['postalCode']} {item['address']['city']}",
@@ -185,11 +186,11 @@ def push2Influx():
                 .tag("fuel_type", fuel)
                 .tag("city", s["address"].split()[-1])
                 .field("price", price)
-                .field("latitude", s["latitude"])
-                .field("longitude", s["longitude"])
+                .field("latitude", round(float(s["latitude"]), 8))
+                .field("longitude", round(float(s["longitude"]), 8))
                 .time(datetime.datetime.utcnow(), WritePrecision.NS)
             )
-            write_api.write(bucket=bucket, org="lux", record=point)
+            write_api.write(bucket=bucket, org=org, record=point)
 
 def createTestStation():
     station = {
