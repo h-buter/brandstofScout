@@ -42,6 +42,9 @@ topCheapestStations = os.environ['TOP_CHEAPEST_STATIONS']
 trendDays = os.environ['TREND_DAYS']
 trendDays = list(map(int, trendDays.split(',')))
 
+fuel_types_raw = os.getenv("FUELTYPE_OF_INTEREST_HA", "")
+selectedFuelTypes = set(fuel_types_raw.split(",")) if fuel_types_raw else set()
+
 stations = []
 
 # Construct the URL with query parameters
@@ -56,22 +59,18 @@ urlANWB = (
 def main():
     print(f"Script executed at {datetime.datetime.now()}")
     # # delete_all_data_from_bucket()
-    # reqAnwbData()
-    # # createTestStation()
-    # push2Influx()
+    reqAnwbData()
+    # createTestStation()
+    push2Influx()
     
-    # fuel_types_raw = os.getenv("FUELTYPE_OF_INTEREST_HA", "")
-    # selectedFuelTypes = set(fuel_types_raw.split(",")) if fuel_types_raw else set()
-
-    # print("Fuel types of interest:", selectedFuelTypes)
-    # for fuelTypes in selectedFuelTypes:
-    #     print(f"Fueltype: ", fuelTypes)
-    #     push2HomeAssistant(topCheapestStations, fuelTypes)
-
-    for days in trendDays:
-        trend = priceTrend(days, "EURO95")
-        if trend != None:
-            pushTrendHomeAssistant(trend, days, "EURO95")
+    print("Fuel types of interest:", selectedFuelTypes)
+    for fuelTypes in selectedFuelTypes:
+        print(f"Fueltype: ", fuelTypes)
+        push2HomeAssistant(topCheapestStations, fuelTypes)
+        for days in trendDays:
+            trend = priceTrend(days, fuelTypes)
+            if trend != None:
+                pushTrendHomeAssistant(trend, days, fuelTypes)
 
     influxClient.close()
 
@@ -90,7 +89,7 @@ def push2HomeAssistant(topX, fuelType):
         |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
         |> group(columns: [])
         |> sort(columns: ["price"])
-        |> limit(n: 2)
+        |> limit(n: {1})
         |> keep(columns: ["price", "station_name", "city", "fuel_type", "latitude", "longitude"])
     """.format(str(fuelType), topX))
 
@@ -113,7 +112,6 @@ def push2HomeAssistant(topX, fuelType):
 
 #Push individual stations to HomeAssistant
 def pushStationHomeAssistant(index, station, fuelType):
-    print("Pushing to home assistant")
     entity_id = f"sensor.cheapest_Fuel_station_{fuelType}_{index}"
     url = f"{HA_URL}/api/states/{entity_id}"
 
@@ -174,7 +172,7 @@ def getStationLogo(station_name):
     normalized_name = station_name.lower()
     for brand in STATION_LOGOS:
         if brand.lower() in normalized_name:
-            print(f"Matched '{brand}' in '{station_name}'")
+            # print(f"Matched '{brand}' in '{station_name}'")
             return STATION_LOGOS[brand]
     print(f"No logo found for '{station_name}', using fallback")
     return "/local/fuelstations/logos/unknown.png"
@@ -240,13 +238,13 @@ def priceTrend(days, fuelType):
             return None
         else:
             array[i] = x
-    trend = calculateRegressionTrend(array)
+    trend = calculateRegressionTrend(array, fuelType)
     return trend
 
     
 
-def calculateRegressionTrend(array):
-    array = [1.90, 1.95, 1.95, 1.80, 1.82, 1.83, 1.90, 1.96, 2.00, 2.10]
+def calculateRegressionTrend(array, fuelType):
+    # array = [2.10, 2.00, 1.80, 1.90, 1.90, 1.80, 1.75, 1.80, 1.50, 1.40]
     length = len(array)
     yAvg = 0
     for i in range(0, length, 1):
@@ -276,11 +274,11 @@ def calculateRegressionTrend(array):
     # print(f"m: {m}, b: {b}, trend: {trend}")
     # print(f"Trend for {length} days is: {trend:.6f}, {trend*100:.3f}%")
 
-    plotPrices(array, m, b)
+    # plotPrices(array, m, b, fuelType, trend)
     return trend
 
 
-def plotPrices(array, m, b):
+def plotPrices(array, m, b, fuelType, trend):
     length = len(array)
     x = list(range(length))
     y = array
@@ -296,11 +294,11 @@ def plotPrices(array, m, b):
 
     plt.clear_figure()
     plt.plot_size(100, 30)
-    plt.title("Prices (dots) and Regression Line")
+    plt.title(f"{fuelType} fuel prices over {length} days")
 
     # Bigger dots
-    plt.scatter(x, y, marker='■', color='cyan')
-    plt.plot(x, regression_line, color='red')
+    plt.scatter(x, y, marker='■', color='cyan', label = "Prices")
+    plt.plot(x, regression_line, color='red', label = f"Regression line: {trend*100:.2f}%")
 
     # Force axis ticks to use clean full numbers
     plt.xticks(x)  # Use exact integer steps for days
