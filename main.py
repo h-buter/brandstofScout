@@ -6,6 +6,8 @@ import influxdb_client, os, time
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 
+import plotext as plt
+
 import os
 from envLogos import* #import logo info
 
@@ -37,6 +39,12 @@ bbox_param = '%2C'.join(map(str, bounding_box))
 
 topCheapestStations = os.environ['TOP_CHEAPEST_STATIONS']
 
+trendDays = os.environ['TREND_DAYS']
+trendDays = list(map(int, trendDays.split(',')))
+
+fuel_types_raw = os.getenv("FUELTYPE_OF_INTEREST_HA", "")
+selectedFuelTypes = set(fuel_types_raw.split(",")) if fuel_types_raw else set()
+
 stations = []
 
 # Construct the URL with query parameters
@@ -50,18 +58,19 @@ urlANWB = (
 
 def main():
     print(f"Script executed at {datetime.datetime.now()}")
-    # delete_all_data_from_bucket()
+    # # delete_all_data_from_bucket()
     reqAnwbData()
     # createTestStation()
     push2Influx()
     
-    fuel_types_raw = os.getenv("FUELTYPE_OF_INTEREST_HA", "")
-    selectedFuelTypes = set(fuel_types_raw.split(",")) if fuel_types_raw else set()
-
     print("Fuel types of interest:", selectedFuelTypes)
     for fuelTypes in selectedFuelTypes:
         print(f"Fueltype: ", fuelTypes)
         push2HomeAssistant(topCheapestStations, fuelTypes)
+        for days in trendDays:
+            trend = priceTrend(days, fuelTypes)
+            if trend != None:
+                pushTrendHomeAssistant(trend, days, fuelTypes)
 
     influxClient.close()
 
@@ -80,7 +89,7 @@ def push2HomeAssistant(topX, fuelType):
         |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
         |> group(columns: [])
         |> sort(columns: ["price"])
-        |> limit(n: 2)
+        |> limit(n: {1})
         |> keep(columns: ["price", "station_name", "city", "fuel_type", "latitude", "longitude"])
     """.format(str(fuelType), topX))
 
@@ -103,7 +112,6 @@ def push2HomeAssistant(topX, fuelType):
 
 #Push individual stations to HomeAssistant
 def pushStationHomeAssistant(index, station, fuelType):
-    print("Pushing to home assistant")
     entity_id = f"sensor.cheapest_Fuel_station_{fuelType}_{index}"
     url = f"{HA_URL}/api/states/{entity_id}"
 
@@ -133,12 +141,38 @@ def pushStationHomeAssistant(index, station, fuelType):
     else:
         print(f"Pushed {entity_id}: {station['station_name']} - €{station['price']}")
 
+#Push trend to HomeAssistant
+def pushTrendHomeAssistant(trend, days, fuelType):
+    trend = trend * 100 #Convert to percentage
+    entity_id = f"sensor.trend_{fuelType}_{days}" 
+    url = f"{HA_URL}/api/states/{entity_id}"
+
+    headers = {
+        "Authorization": f"Bearer {HA_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "state": trend,
+        "attributes": {
+            "unit_of_measurement": "%",
+            "friendly_name": f"trend - {days}-days - {fuelType}",
+            "custom_group": "fueltracker"
+        }
+    }
+
+    response = requests.post(url, json=payload, headers=headers)
+    if response.status_code not in (200, 201):
+        print(f"Failed to push {entity_id}: {response.status_code} — {response.text}")
+    else:
+        print(f"Pushed {entity_id}: trend of {days} days: {trend:.1f}% to HomeAssistant")
+
 #Find name of the associated logo
 def getStationLogo(station_name):
     normalized_name = station_name.lower()
     for brand in STATION_LOGOS:
         if brand.lower() in normalized_name:
-            print(f"Matched '{brand}' in '{station_name}'")
+            # print(f"Matched '{brand}' in '{station_name}'")
             return STATION_LOGOS[brand]
     print(f"No logo found for '{station_name}', using fallback")
     return "/local/fuelstations/logos/unknown.png"
@@ -191,6 +225,125 @@ def push2Influx():
                 .time(datetime.datetime.utcnow(), WritePrecision.NS)
             )
             write_api.write(bucket=bucket, org=org, record=point)
+
+def priceTrend(days, fuelType):
+    sum = 0.0
+    array = {}
+    for i in range(0, days, 1):
+        # print("day: ", i)
+        x = reqCheapestPriceOnDay(fuelType, i)
+        # print(x)
+        if (x == None):
+            print(f"Not enough data for {days} days trend")
+            return None
+        else:
+            array[i] = x
+    trend = calculateRegressionTrend(array, fuelType)
+    return trend
+
+    
+
+def calculateRegressionTrend(array, fuelType):
+    # array = [2.10, 2.00, 1.80, 1.90, 1.90, 1.80, 1.75, 1.80, 1.50, 1.40]
+    length = len(array)
+    yAvg = 0
+    for i in range(0, length, 1):
+        yAvg += array[i]
+        # print(array[i])
+    yAvg = yAvg / length
+
+    xAvg = 0.5 * length * (length + 1) / length
+
+    #sum of (xi - avg(x))*(yi - avg(y))
+    numerator = 0
+    for i in range(0, length, 1):
+        # print(f"i {i+1}")
+        z = (i + 1 - xAvg) * (array[i] - yAvg)
+        numerator += z
+    
+    #sum of (xi - avg(x))^2
+    denominator = 0
+    for i in range(0, length, 1):
+
+        denominator += pow(((i + 1) - xAvg), 2)
+
+    m = numerator / denominator
+    b = yAvg - m * xAvg
+    trend = m * length / yAvg
+
+    # print(f"m: {m}, b: {b}, trend: {trend}")
+    # print(f"Trend for {length} days is: {trend:.6f}, {trend*100:.3f}%")
+
+    # plotPrices(array, m, b, fuelType, trend)
+    return trend
+
+
+def plotPrices(array, m, b, fuelType, trend):
+    length = len(array)
+    x = list(range(length))
+    y = array
+    regression_line = [m * xi + b for xi in x]
+
+    # Calculate nice full number ticks for X and Y
+    y_min = min(min(y), min(regression_line))
+    y_max = max(max(y), max(regression_line))
+    
+    y_tick_min = int(y_min * 100) // 1 / 100  # Round down to 0.01
+    y_tick_max = int(y_max * 100 + 1) // 1 / 100  # Round up to 0.01
+    y_ticks = [round(tick, 2) for tick in plotext_range(y_tick_min, y_tick_max, 0.05)]
+
+    plt.clear_figure()
+    plt.plot_size(100, 30)
+    plt.title(f"{fuelType} fuel prices over {length} days")
+
+    # Bigger dots
+    plt.scatter(x, y, marker='■', color='cyan', label = "Prices")
+    plt.plot(x, regression_line, color='red', label = f"Regression line: {trend*100:.2f}%")
+
+    # Force axis ticks to use clean full numbers
+    plt.xticks(x)  # Use exact integer steps for days
+    plt.yticks(y_ticks)
+
+    plt.xlabel("Day")
+    plt.ylabel("Price")
+    plt.show()
+
+def plotext_range(start, stop, step):
+    # Avoid floating point issues in range
+    ticks = []
+    while start <= stop:
+        ticks.append(start)
+        start = round(start + step, 4)
+    return ticks
+
+def reqCheapestPriceOnDay(fuelType, daysPast):
+    begin = f"-{daysPast + 1}d"
+    end = f"-{daysPast}d"
+
+    query_api = influxClient.query_api()
+    flux_query =f"""
+    from(bucket: "fuel_prices")
+        |> range(start: {begin}, stop: {end})
+        |> filter(fn: (r) => r._field == "price")
+        |> filter(fn: (r) => r.fuel_type == "{fuelType}")
+        |> aggregateWindow(every: 1d, fn: min, createEmpty: false)
+        |> group(columns: ["station_name", "city", "fuel_type"])
+        |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+        |> group(columns: [])
+        |> sort(columns: ["price"])
+        |> limit(n: 1)
+        |> keep(columns: ["price", "station_name", "city", "fuel_type", "_time"])
+    """
+
+
+    result = query_api.query(flux_query)
+    records = result[0].records if result else []
+
+    if not records:
+        return None  # No data found
+
+    return records[0]["price"]
+
 
 def createTestStation():
     station = {
