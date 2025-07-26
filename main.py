@@ -144,7 +144,7 @@ def pushStationHomeAssistant(index, station, fuelType):
 #Push trend to HomeAssistant
 def pushTrendHomeAssistant(trend, days, fuelType):
     trend = trend * 100 #Convert to percentage
-    entity_id = f"sensor.trend_{days}_{fuelType}"
+    entity_id = f"sensor.trend_{fuelType}_{days}" 
     url = f"{HA_URL}/api/states/{entity_id}"
 
     headers = {
