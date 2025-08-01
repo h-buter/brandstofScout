@@ -81,7 +81,7 @@ def push2HomeAssistant(topX, fuelType):
     #Query the top topX cheapest stations
     flux_query =("""
     from(bucket: "fuel_prices")
-        |> range(start: today())
+        |> range(start: -1h)
         |> filter(fn: (r) => r._field == "price" or r._field == "latitude" or r._field == "longitude")
         |> filter(fn: (r) => r.fuel_type == "{0}")
         |> aggregateWindow(every: 1d, fn: min, createEmpty: false)
@@ -92,7 +92,6 @@ def push2HomeAssistant(topX, fuelType):
         |> limit(n: {1})
         |> keep(columns: ["price", "station_name", "city", "fuel_type", "latitude", "longitude"])
     """.format(str(fuelType), topX))
-
 
     result = query_api.query(flux_query)
     records = result[0].records if result else []
