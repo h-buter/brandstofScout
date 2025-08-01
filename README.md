@@ -5,8 +5,6 @@ brandstofScout is a python script that scout the cheapest fuel in the Netherland
 # Getting started
 
 - Clone the repo
-- Create virtual env
-- Install the required packages in requirements.txt
 - Rename the .env.example to .env
 - Populate the .env with your own secrets
 - Run the Docker Compose file: ```sudo docker compose down && sudo docker compose build && sudo docker compose up -d```
