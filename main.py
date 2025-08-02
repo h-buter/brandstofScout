@@ -111,34 +111,37 @@ def push2HomeAssistant(topX, fuelType):
 
 #Push individual stations to HomeAssistant
 def pushStationHomeAssistant(index, station, fuelType):
-    entity_id = f"sensor.cheapest_Fuel_station_{fuelType}_{index}"
-    url = f"{HA_URL}/api/states/{entity_id}"
-
-    headers = {
-        "Authorization": f"Bearer {HA_TOKEN}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "state": round(station['price'], 3),
-        "attributes": {
-            "station_name": station["station_name"],
-            "city": station["city"],
-            "lat": station["lat"],
-            "lon": station["lon"],
-            "fuel_type": station["fuel_type"],
-            "logo": station["logo"],
-            "unit_of_measurement": "€",
-            "friendly_name": f"{station['station_name']} - {station['city']} - {fuelType}",
-            "custom_group": "fueltracker"
-        }
-    }
-
-    response = requests.post(url, json=payload, headers=headers)
-    if response.status_code not in (200, 201):
-        print(f"Failed to push {entity_id}: {response.status_code} — {response.text}")
+    if (station['price'] == 0):
+        print(f"{station['station_name']} - {station['price']} is unknown or has a null value, omitting this data entry")
     else:
-        print(f"Pushed {entity_id}: {station['station_name']} - €{station['price']}")
+        entity_id = f"sensor.cheapest_Fuel_station_{fuelType}_{index}"
+        url = f"{HA_URL}/api/states/{entity_id}"
+
+        headers = {
+            "Authorization": f"Bearer {HA_TOKEN}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "state": round(station['price'], 3),
+            "attributes": {
+                "station_name": station["station_name"],
+                "city": station["city"],
+                "lat": station["lat"],
+                "lon": station["lon"],
+                "fuel_type": station["fuel_type"],
+                "logo": station["logo"],
+                "unit_of_measurement": "€",
+                "friendly_name": f"{station['station_name']} - {station['city']} - {fuelType}",
+                "custom_group": "fueltracker"
+            }
+        }
+
+        response = requests.post(url, json=payload, headers=headers)
+        if response.status_code not in (200, 201):
+            print(f"Failed to push {entity_id}: {response.status_code} — {response.text}")
+        else:
+            print(f"Pushed {entity_id}: {station['station_name']} - €{station['price']}")
 
 #Push trend to HomeAssistant
 def pushTrendHomeAssistant(trend, days, fuelType):
@@ -210,20 +213,25 @@ def push2Influx():
 
     #Write date to influxDB
     write_api = influxClient.write_api(write_options=SYNCHRONOUS)
-
+    
     for s in stations:
         for fuel, price in s["fuel_prices"].items():
-            point = (
-                Point("fuel_station_price")
-                .tag("station_name", s["name"])
-                .tag("fuel_type", fuel)
-                .tag("city", s["address"].split()[-1])
-                .field("price", price)
-                .field("latitude", round(float(s["latitude"]), 8))
-                .field("longitude", round(float(s["longitude"]), 8))
-                .time(datetime.datetime.utcnow(), WritePrecision.NS)
-            )
-            write_api.write(bucket=bucket, org=org, record=point)
+            name = s["name"]
+            # print(f"price {name} - {price}")
+            if (price == 0):
+                print(f"{name} - {price} is unknown or has a null value, omitting this data entry")
+            else:
+                point = (
+                    Point("fuel_station_price")
+                    .tag("station_name", s["name"])
+                    .tag("fuel_type", fuel)
+                    .tag("city", s["address"].split()[-1])
+                    .field("price", float(price))
+                    .field("latitude", round(float(s["latitude"]), 8))
+                    .field("longitude", round(float(s["longitude"]), 8))
+                    .time(datetime.datetime.utcnow(), WritePrecision.NS)
+                )
+                write_api.write(bucket=bucket, org=org, record=point)
 
 def priceTrend(days, fuelType):
     sum = 0.0
