@@ -332,7 +332,7 @@ def plotext_range(start, stop, step):
         start = round(start + step, 4)
     return ticks
 
-def plotPrices2Png(array, m, b, fuelType, trend, output_dir="plots"):
+def plotPrices2Png(array, m, b, fuelType, trend, output_dir="/app/plots"):
     # Handle dict input
     if isinstance(array, dict):
         array = [array[k] for k in sorted(array.keys())]
