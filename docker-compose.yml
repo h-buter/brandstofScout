@@ -8,4 +8,7 @@ services:
       context: .
     volumes:
       - /etc/localtime:/etc/localtime:ro
+      - ./volumes/plots:/app/plots
+    ports:
+      - 8000:8000
 
