@@ -346,24 +346,44 @@ def plotPrices2Png(array, m, b, fuelType, trend, output_dir="/app/plots"):
 
     regression_line = [m * xi + b for xi in x]
 
-    y_min = min(min(y), min(regression_line))
-    y_max = max(max(y), max(regression_line))
+    fig, ax = pltGui.subplots(figsize=(10, 4))
 
-    pltGui.figure(figsize=(10, 4))
-    pltGui.scatter(x, y, color='cyan', label="Prices", s=40)
-    pltGui.plot(x, regression_line, color='red', label=f"Trend: {trend*100:.2f}%")
+    # # Set black background
+    # fig.patch.set_facecolor('black')
+    # ax.set_facecolor('black')
 
-    pltGui.xticks(x)
-    pltGui.yticks()
+    for spine in ax.spines.values():
+        spine.set_color('white')
 
-    pltGui.title(f"{fuelType} fuel prices over {len(y)} days")
+    # Plot points and regression line
+    ax.scatter(x, y, color='cyan', label="Prices", s=40)
+    ax.plot(x, regression_line, color='red', label=f"Trend: {trend*100:.2f}%")
+
+    # Set ticks and labels color to white
+    ax.tick_params(colors='white')  # ticks
+    ax.xaxis.label.set_color('white')  # x label
+    ax.yaxis.label.set_color('white')  # y label
+
+    # Set title color
+    ax.set_title(f"{fuelType} fuel prices over {len(y)} days", color='white')
     pltGui.xlabel("Day")
     pltGui.ylabel("Price")
-    pltGui.legend()
 
+    # Set legend text color
+    legend = ax.legend()
+    for text in legend.get_texts():
+        text.set_color('white')
+
+    # Set ticks to integers for x axis
+    ax.set_xticks(x)
+
+    # Adjust subplot params to reduce left/right margin
+    pltGui.subplots_adjust(left=0.07, right=0.99)
+
+    # Save figure with transparent background
     os.makedirs(output_dir, exist_ok=True)
     file_path = os.path.join(output_dir, f"{fuelType.lower()}_trend.png")
-    pltGui.savefig(file_path)
+    pltGui.savefig(file_path, transparent=True)
     pltGui.close()
 
     print(f"Saved plot to {file_path}")
