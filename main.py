@@ -6,10 +6,12 @@ import influxdb_client, os, time
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 
-import plotext as plt
+import plotext as pltTui
 
 import os
 from envLogos import* #import logo info
+
+import matplotlib.pyplot as pltGui
 
 #InfluxDB
 INFLUXDB_TOKEN = os.environ['SECRET_INFLUX_TOKEN']
@@ -236,7 +238,7 @@ def push2Influx():
 def priceTrend(days, fuelType):
     sum = 0.0
     array = {}
-    for i in range(0, days, 1):
+    for i in range(0, days, 1): 
         # print("day: ", i)
         x = reqCheapestPriceOnDay(fuelType, i)
         # print(x)
@@ -244,11 +246,10 @@ def priceTrend(days, fuelType):
             print(f"Not enough data for {days} days trend")
             return None
         else:
-            array[i] = x
+            array[days - 1 - i] = x #invert array so that most past date is first
     trend = calculateRegressionTrend(array, fuelType)
     return trend
 
-    
 
 def calculateRegressionTrend(array, fuelType):
     # array = [2.10, 2.00, 1.80, 1.90, 1.90, 1.80, 1.75, 1.80, 1.50, 1.40]
@@ -281,47 +282,91 @@ def calculateRegressionTrend(array, fuelType):
     # print(f"m: {m}, b: {b}, trend: {trend}")
     # print(f"Trend for {length} days is: {trend:.6f}, {trend*100:.3f}%")
 
-    # plotPrices(array, m, b, fuelType, trend)
+    plotPrices(array, m, b, fuelType, trend)
+    plotPrices2Png(array, m, b, fuelType, trend)
     return trend
 
 
 def plotPrices(array, m, b, fuelType, trend):
+    import plotext as pltTui
+
+    # Handle dict input
+    if isinstance(array, dict):
+        array = [array[k] for k in sorted(array.keys())]
+
     length = len(array)
     x = list(range(length))
     y = array
     regression_line = [m * xi + b for xi in x]
 
-    # Calculate nice full number ticks for X and Y
+    # Determine Y-axis ticks with clean formatting
     y_min = min(min(y), min(regression_line))
     y_max = max(max(y), max(regression_line))
     
-    y_tick_min = int(y_min * 100) // 1 / 100  # Round down to 0.01
-    y_tick_max = int(y_max * 100 + 1) // 1 / 100  # Round up to 0.01
-    y_ticks = [round(tick, 2) for tick in plotext_range(y_tick_min, y_tick_max, 0.05)]
+    y_tick_min = round((int(y_min / 0.05) * 0.05), 2)
+    y_tick_max = round(((int(y_max / 0.05) + 1) * 0.05), 2)
+    y_ticks = plotext_range(y_tick_min, y_tick_max, 0.05)
 
-    plt.clear_figure()
-    plt.plot_size(100, 30)
-    plt.title(f"{fuelType} fuel prices over {length} days")
+    # Clear and set up plot
+    pltTui.clear_figure()
+    pltTui.plot_size(100, 30)
+    pltTui.title(f"{fuelType} fuel prices over {length} days")
 
-    # Bigger dots
-    plt.scatter(x, y, marker='■', color='cyan', label = "Prices")
-    plt.plot(x, regression_line, color='red', label = f"Regression line: {trend*100:.2f}%")
+    pltTui.scatter(x, y, marker='■', color='cyan', label="Prices")
+    pltTui.plot(x, regression_line, color='red', label=f"Trend: {trend*100:.2f}%")
 
-    # Force axis ticks to use clean full numbers
-    plt.xticks(x)  # Use exact integer steps for days
-    plt.yticks(y_ticks)
+    # Set ticks and labels
+    pltTui.xticks(x)
+    pltTui.yticks(y_ticks)
 
-    plt.xlabel("Day")
-    plt.ylabel("Price")
-    plt.show()
+    pltTui.xlabel("Day")
+    pltTui.ylabel("Price")
+
+    pltTui.show()
 
 def plotext_range(start, stop, step):
-    # Avoid floating point issues in range
+    # Avoid floating-point issues in range
     ticks = []
     while start <= stop:
-        ticks.append(start)
+        ticks.append(round(start, 2))
         start = round(start + step, 4)
     return ticks
+
+def plotPrices2Png(array, m, b, fuelType, trend, output_dir="plots"):
+    # Handle dict input
+    if isinstance(array, dict):
+        array = [array[k] for k in sorted(array.keys())]
+
+    y = array
+    x = list(range(len(y)))
+
+    if len(x) != len(y):
+        print(f"Cannot plot: x = {len(x)}, y = {len(y)}")
+        return
+
+    regression_line = [m * xi + b for xi in x]
+
+    y_min = min(min(y), min(regression_line))
+    y_max = max(max(y), max(regression_line))
+
+    pltGui.figure(figsize=(10, 4))
+    pltGui.scatter(x, y, color='cyan', label="Prices", s=40)
+    pltGui.plot(x, regression_line, color='red', label=f"Trend: {trend*100:.2f}%")
+
+    pltGui.xticks(x)
+    pltGui.yticks()
+
+    pltGui.title(f"{fuelType} fuel prices over {len(y)} days")
+    pltGui.xlabel("Day")
+    pltGui.ylabel("Price")
+    pltGui.legend()
+
+    os.makedirs(output_dir, exist_ok=True)
+    file_path = os.path.join(output_dir, f"{fuelType.lower()}_trend.png")
+    pltGui.savefig(file_path)
+    pltGui.close()
+
+    print(f"Saved plot to {file_path}")
 
 def reqCheapestPriceOnDay(fuelType, daysPast):
     begin = f"-{daysPast + 1}d"
@@ -349,6 +394,7 @@ def reqCheapestPriceOnDay(fuelType, daysPast):
     if not records:
         return None  # No data found
 
+    # print(records[0]["price"])
     return records[0]["price"]
 
 

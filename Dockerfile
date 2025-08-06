@@ -1,5 +1,7 @@
 FROM python:3.11-slim
 
+VOLUME /app/plots
+
 # Set working directory
 WORKDIR /app
 
@@ -19,7 +21,10 @@ RUN crontab /app/crontab.txt
 COPY main.py /app/main.py
 COPY envLogos.py /app/envLogos.py 
 
+# Expose port for HTTP access
+EXPOSE 8000
 
-
-# Inject env vars into global environment for cron, then start cron
-CMD printenv >> /etc/environment && cron -f
+# Inject env vars into global environment, then start both cron and HTTP server in foreground
+CMD printenv >> /etc/environment && \
+    cron && \
+    python3 -m http.server 8000 --directory /app/plots
