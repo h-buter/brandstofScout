@@ -282,8 +282,8 @@ def calculateRegressionTrend(array, fuelType):
     # print(f"m: {m}, b: {b}, trend: {trend}")
     # print(f"Trend for {length} days is: {trend:.6f}, {trend*100:.3f}%")
 
-    plotPrices(array, m, b, fuelType, trend)
-    plotPrices2Png(array, m, b, fuelType, trend)
+    # plotPrices(array, m, b, fuelType, trend)
+    plotPrices2Png(array, m, b, fuelType, trend, len(array))
     return trend
 
 
@@ -332,19 +332,21 @@ def plotext_range(start, stop, step):
         start = round(start + step, 4)
     return ticks
 
-def plotPrices2Png(array, m, b, fuelType, trend, output_dir="/app/plots"):
+def plotPrices2Png(array, m, b, fuelType, trend, days, output_dir="/app/plots"):
     # Handle dict input
     if isinstance(array, dict):
         array = [array[k] for k in sorted(array.keys())]
 
     y = array
-    x = list(range(len(y)))
+    x = list(range(len(y) * - 1 + 1, 1, 1))
+    print(x)
 
     if len(x) != len(y):
         print(f"Cannot plot: x = {len(x)}, y = {len(y)}")
         return
-
-    regression_line = [m * xi + b for xi in x]
+        
+    xReverse = x[::-1]
+    regression_line = [m * xi * -1 + b for xi in xReverse]
 
     fig, ax = pltGui.subplots(figsize=(10, 4))
 
@@ -382,7 +384,7 @@ def plotPrices2Png(array, m, b, fuelType, trend, output_dir="/app/plots"):
 
     # Save figure with transparent background
     os.makedirs(output_dir, exist_ok=True)
-    file_path = os.path.join(output_dir, f"{fuelType.lower()}_trend.png")
+    file_path = os.path.join(output_dir, f"{fuelType.lower()}_trend_{days}d.png")
     pltGui.savefig(file_path, transparent=True)
     pltGui.close()
 
