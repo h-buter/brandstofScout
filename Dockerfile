@@ -20,6 +20,7 @@ RUN crontab /app/crontab.txt
 # Copy files
 COPY main.py /app/main.py
 COPY envLogos.py /app/envLogos.py 
+COPY favicon.ico /app/plots/favicon.ico
 
 # Expose port for HTTP access
 EXPOSE 8000
